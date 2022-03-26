@@ -3,10 +3,15 @@ package calc
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 )
 
-var bp = map[tokenType]int{
+var (
+	errMissingClosingBracket = errors.New("missing closing bracket")
+)
+
+var bindingPower = map[tokenType]int{
 	tokenNumber:       0,
 	tokenCloseBracket: 0,
 	tokenPlus:         20,
@@ -17,8 +22,8 @@ var bp = map[tokenType]int{
 	tokenOpenBracket:  50,
 }
 
-func bindingPower(t tokenType) int {
-	if p, ok := bp[t]; ok {
+func tokenBindingPower(t tokenType) int {
+	if p, ok := bindingPower[t]; ok {
 		return p
 	}
 	return 0
@@ -26,75 +31,55 @@ func bindingPower(t tokenType) int {
 
 type expression func() float64
 
-//prefixParser defines a function that takes a token and
-//returns an expression
-type prefixParser func(*token, *scanner) (expression, error)
-
-//prefixParsers maps token types on to a function that returns a
-//prefix expression for that token type.
-var prefixParsers map[tokenType]prefixParser
-
-func init() {
-	prefixParsers = map[tokenType]prefixParser{
-		tokenNumber: func(t *token, s *scanner) (expression, error) {
-			num, err := strconv.ParseFloat(t.v, 64)
-			if err != nil {
-				return nil, err
-			}
-			return func() float64 { return num }, nil
-		},
-		tokenOpenBracket: func(t *token, s *scanner) (expression, error) {
-			inner, err := parse(s, 0)
-			if err != nil {
-				return nil, err
-			}
-			next := s.next()
-			if next.tokenType != tokenCloseBracket {
-				return nil, errors.New(",missing closing bracket")
-			}
-			return inner, nil
-		},
-	}
-}
-
-type infixParser func(expression, expression) expression
-
-//infixParsers maps token types on to a function that returns an infix
-//expression for that token type
-var infixParsers = map[tokenType]infixParser{
-	tokenPlus: func(left expression, right expression) expression {
-		return func() float64 { return left() + right() }
-	},
-	tokenMinus: func(left expression, right expression) expression {
-		return func() float64 { return left() - right() }
-	},
-	tokenMultiply: func(left expression, right expression) expression {
-		return func() float64 { return left() * right() }
-	},
-	tokenDivide: func(left expression, right expression) expression {
-		return func() float64 { return left() / right() }
-	},
-}
-
-func parsePrefixExpression(t *token, s *scanner) (expression, error) {
-	if _, ok := prefixParsers[t.tokenType]; !ok {
-		return nil, errors.New(fmt.Sprintf("no prefix expression available for token type %v", t.tokenType))
-	}
-
-	return prefixParsers[t.tokenType](t, s)
-}
-
-func parseInfixExpression(left expression, t *token, s *scanner) (expression, error) {
-	if _, ok := infixParsers[t.tokenType]; !ok {
-		return nil, errors.New(fmt.Sprintf("infixExpression undefined for token type %v", t.tokenType))
-	}
-
-	right, err := parse(s, bindingPower(t.tokenType))
+func expressionOpenBracket(s *scanner) (expression, error) {
+	inner, err := parse(s, 0)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse right node from %v, %w", t, err)
+		return nil, err
 	}
 
-	return infixParsers[t.tokenType](left, right), nil
+	next := s.next()
+	if next.tokenType != tokenCloseBracket {
+		return nil, errMissingClosingBracket
+	}
+
+	return inner, nil
+}
+
+func expressionNegation(s *scanner) (expression, error) {
+	next, err := parse(s, bindingPower[tokenMinus])
+	if err != nil {
+		return nil, err
+	}
+
+	return func() float64 { return next() * -1 }, nil
+}
+
+func expressionAddition(left expression, right expression) expression {
+	return func() float64 { return left() + right() }
+}
+
+func expressionSubtraction(left expression, right expression) expression {
+	return func() float64 { return left() - right() }
+}
+
+func expressionMultiplication(left expression, right expression) expression {
+	return func() float64 { return left() * right() }
+}
+
+func expressionDivision(left expression, right expression) expression {
+	return func() float64 { return left() / right() }
+}
+
+func expressionPower(left expression, right expression) expression {
+	return func() float64 { return math.Pow(left(), right()) }
+}
+
+func expressionLiteral(t *token) (expression, error) {
+	num, err := strconv.ParseFloat(t.value, 64)
+	if err != nil {
+		return nil, err
+	}
+	return func() float64 { return num }, nil
 }
 
 func parse(s *scanner, rightBindingPower int) (expression, error) {
@@ -103,7 +88,7 @@ func parse(s *scanner, rightBindingPower int) (expression, error) {
 		return nil, err
 	}
 
-	for bindingPower(s.peek().tokenType) > rightBindingPower {
+	for tokenBindingPower(s.peek()) > rightBindingPower {
 		left, err = parseInfixExpression(left, s.next(), s)
 		if err != nil {
 			return nil, err
@@ -111,4 +96,58 @@ func parse(s *scanner, rightBindingPower int) (expression, error) {
 	}
 
 	return left, nil
+}
+
+func errInvalidPrefixToken(t *token) error {
+	return fmt.Errorf("unable to parse prefix expression for token: %v", t)
+}
+
+func parsePrefixExpression(t *token, s *scanner) (expression, error) {
+	switch t.tokenType {
+	case tokenNumber:
+		return expressionLiteral(t)
+	case tokenMinus:
+		return expressionNegation(s)
+	case tokenOpenBracket:
+		return expressionOpenBracket(s)
+	default:
+		return nil, errInvalidPrefixToken(t)
+	}
+}
+
+func errInvalidInfixToken(t *token) error {
+	return fmt.Errorf("unable to parse infix expression for token: %v", t)
+}
+
+type infixParser func(expression, expression) expression
+
+func parseInfixExpression(left expression, t *token, s *scanner) (expression, error) {
+	var parser infixParser
+	switch t.tokenType {
+	case tokenPlus:
+		parser = expressionAddition
+	case tokenMinus:
+		parser = expressionSubtraction
+	case tokenMultiply:
+		parser = expressionMultiplication
+	case tokenDivide:
+		parser = expressionDivision
+	case tokenPower:
+		parser = expressionPower
+	default:
+		return nil, errInvalidInfixToken(t)
+	}
+
+	binding := tokenBindingPower(t.tokenType)
+	if t.tokenType == tokenPower {
+		//Power is right associative
+		binding -= 1
+	}
+
+	right, err := parse(s, binding)
+	if err != nil {
+		return nil, err
+	}
+
+	return parser(left, right), nil
 }

@@ -7,6 +7,28 @@ import (
 
 type tokenType uint
 
+func (t tokenType) String() string {
+	switch t {
+	case tokenNumber:
+		return "NUMBER"
+	case tokenMinus:
+		return "MINUS"
+	case tokenMultiply:
+		return "MULTIPLY"
+	case tokenDivide:
+		return "DIVIDE"
+	case tokenPower:
+		return "POWER"
+	case tokenOpenBracket:
+		return "OPEN_BRACKET"
+	case tokenCloseBracket:
+		return "CLOSE_BRACKET"
+	case tokenEnd:
+		return "EOF"
+	}
+	return "UNKNOWN"
+}
+
 type tokenMatcher func(string) (bool, string)
 
 func literal(literal string) tokenMatcher {
@@ -18,7 +40,7 @@ func literal(literal string) tokenMatcher {
 func pattern(pattern string) tokenMatcher {
 	regex, err := regexp.Compile(pattern)
 	if err != nil {
-		panic(fmt.Errorf("invalid regex expression: %w", err))
+		panic(err)
 	}
 	return func(s string) (bool, string) {
 		return regex.MatchString(s), regex.FindString(s)
@@ -50,11 +72,11 @@ var tokenMatchers = map[tokenType]tokenMatcher{
 
 type token struct {
 	tokenType tokenType
-	v         string
+	value     string
 }
 
 func (t *token) String() string {
-	return fmt.Sprintf("%v", *t)
+	return fmt.Sprintf("type:%v, value:%s", t.tokenType, t.value)
 }
 
 func getNextToken(s string) *token {

@@ -10,16 +10,20 @@ type scanner struct {
 	position int
 }
 
+func errInvalidInput(s string) error {
+	return fmt.Errorf("invalid input: %s", s)
+}
+
 func newScanner(s string) (*scanner, error) {
 	tokens := make([]*token, 0)
-	s = strings.ReplaceAll(s, " ", "")
+	s = stripSpaces(s)
 	for len(s) > 0 {
 		t := getNextToken(s)
 		if t == nil {
-			panic(fmt.Errorf("no token found for input %s", s))
+			return nil, errInvalidInput(s)
 		}
 		tokens = append(tokens, t)
-		s = s[len(t.v):]
+		s = s[len(t.value):]
 	}
 
 	return &scanner{tokens: tokens}, nil
@@ -34,9 +38,13 @@ func (s *scanner) next() *token {
 	return t
 }
 
-func (s *scanner) peek() *token {
-	if s.position >= len(s.tokens)-1 {
-		return &eofToken
+func (s *scanner) peek() tokenType {
+	if s.position == len(s.tokens) {
+		return tokenEnd
 	}
-	return s.tokens[s.position]
+	return s.tokens[s.position].tokenType
+}
+
+func stripSpaces(s string) string {
+	return strings.ReplaceAll(s, " ", "")
 }

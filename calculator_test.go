@@ -16,8 +16,8 @@ func TestCalculate(t *testing.T) {
 		"3*9":   27,
 		"1*2*3": 6,
 		//Basic Division
-		"9/3":      3,
-		"100/5/4/": 5,
+		"9/3":     3,
+		"100/5/4": 5,
 		//Basic Combinations
 		"20-1+3":   22,
 		"20/10*2":  4,
@@ -33,22 +33,19 @@ func TestCalculate(t *testing.T) {
 		"3*(2+6)":                 24,
 		"3*((2+6)*2))":            48,
 		"(3*((2+6)*2))/(3*(2+6))": 2,
-		//TODO:
-		// - negation
-		// + power
+		//Negation
+		"-4+2":   -2,
+		"-4--2":  -2,
+		"-4-2":   -6,
+		"-(4*2)": -8,
+		// ^ power
+		"5^2^3": 390625,
 	}
-
-	//TODO: Error cases!
-	// space should not concat numbers
-	// extra operator at end should cause error
-	// invalid operators or tokens should cause error
-	// duplicate operators (**)
-	// (3*((2+6)*2)))/(3*(2+6)) - extra bracket should cause rror
 
 	for input, expected := range cases {
 		actual, err := Calculate(input)
 		if err != nil {
-			t.Errorf("Error on %s: %v", input, err)
+			t.Errorf("Error on %s: %value", input, err)
 		} else if actual != expected {
 			t.Errorf("For %s expected %f, got %f", input, expected, actual)
 		}

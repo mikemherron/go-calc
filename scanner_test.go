@@ -36,7 +36,7 @@ func TestNewScanner(t *testing.T) {
 			t.Fatalf(e.Error())
 		}
 		if !tokensEqual(s.tokens, expected) {
-			t.Fatalf("For %s, expected %v to equal %v", input, expected, s.tokens)
+			t.Fatalf("For %s, expected %value to equal %value", input, expected, s.tokens)
 		}
 
 	}

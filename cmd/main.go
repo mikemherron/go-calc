@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"calc"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 )
@@ -14,19 +15,30 @@ func main() {
 	fmt.Println("Calculator")
 	for {
 		fmt.Print("-> ")
-		text, err := reader.ReadString('\n')
+		input, err := reader.ReadString('\n')
 		if err != nil {
 			panic(err)
 		}
 
-		text = strings.Replace(text, "\r\n", "", -1)
+		input = stripNewLines(input)
 
-		result, err := calc.Calculate(text)
+		result, err := calc.Calculate(input)
 		if err != nil {
-			fmt.Println("ERROR:" + err.Error())
+			fmt.Printf("ERR:%s\n", err.Error())
 		} else {
-			fmt.Printf("%f\n", result)
+			isWholeNumber := result == math.Trunc(result)
+			if isWholeNumber {
+				fmt.Printf("%d\n", int64(result))
+			} else {
+				fmt.Printf("%f\n", result)
+			}
 		}
 	}
+}
 
+func stripNewLines(s string) string {
+	s = strings.Replace(s, "\r\n", "", -1)
+	s = strings.Replace(s, "\n", "", -1)
+
+	return s
 }
